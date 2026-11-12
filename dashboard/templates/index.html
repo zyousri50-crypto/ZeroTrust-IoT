@@ -1,0 +1,930 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZeroTrust IoT Security Dashboard</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: #0b1220;
+    color: #e2e8f0;
+    font-family: Arial, sans-serif;
+}
+
+header {
+    padding: 28px;
+    background: #111c30;
+    border-bottom: 1px solid #293750;
+}
+
+header h1 {
+    color: #38bdf8;
+    margin: 0 0 8px;
+}
+
+h2 { margin-top: 32px; }
+h3 { margin-top: 0; }
+
+main {
+    max-width: 1350px;
+    margin: auto;
+    padding: 24px;
+}
+
+.muted { color: #94a3b8; }
+.green { color: #4ade80; }
+.red { color: #fb7185; }
+.yellow { color: #facc15; }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit, minmax(210px, 1fr)
+    );
+    gap: 16px;
+}
+
+.card, .panel {
+    background: #172338;
+    border: 1px solid #2b3c55;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.number {
+    font-size: 30px;
+    font-weight: bold;
+    margin-top: 12px;
+}
+
+button, .download {
+    display: inline-block;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 7px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    margin: 5px 8px 5px 0;
+}
+
+button:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.block { background: #dc2626; }
+.unblock { background: #16a34a; }
+.csv { background: #0284c7; }
+.pdf { background: #7c3aed; }
+
+.table-wrap {
+    overflow-x: auto;
+    background: #172338;
+    border: 1px solid #2b3c55;
+    border-radius: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #334155;
+    text-align: left;
+    font-size: 14px;
+}
+
+th { color: #38bdf8; }
+
+.alert {
+    padding: 12px;
+    margin: 8px 0;
+    border-left: 4px solid #f59e0b;
+    background: #243047;
+    border-radius: 5px;
+}
+
+.chart-row {
+    display: grid;
+    grid-template-columns: 75px 1fr 45px;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.track {
+    height: 20px;
+    background: #334155;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.bar {
+    height: 100%;
+    background: #38bdf8;
+}
+
+.timeline-item {
+    padding: 14px;
+    border-left: 3px solid #38bdf8;
+    margin: 10px 0;
+    background: #1e2d44;
+    border-radius: 5px;
+}
+
+.timeline-item.drop {
+    border-color: #fb7185;
+}
+
+.timeline-item.access {
+    border-color: #4ade80;
+}
+
+.timeline-item p {
+    margin: 5px 0;
+}
+
+.section-note {
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+    main { padding: 12px; }
+    header { padding: 18px; }
+    .number { font-size: 25px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>ZeroTrust IoT Security Dashboard</h1>
+    <p class="muted">
+        Live Network Monitoring, Access Control
+        & Security Analytics
+    </p>
+</header>
+
+<main>
+
+<h2>Security Overview</h2>
+<div class="grid">
+    <div class="card">
+        <h3>Historical Dropped Packets</h3>
+        <div class="number" id="history-packets">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Security Events</h3>
+        <div class="number" id="events">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Dashboard API</h3>
+        <div class="number" id="api-status">Loading</div>
+    </div>
+
+    <div class="card">
+        <h3>Security Monitor</h3>
+        <div class="number" id="monitor-status">Loading</div>
+    </div>
+</div>
+
+<h2>Live Network Traffic</h2>
+<div class="grid">
+    <div class="card">
+        <h3>Allowed Packets</h3>
+        <div class="number green" id="allowed">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Dropped Packets</h3>
+        <div class="number red" id="dropped">--</div>
+    </div>
+
+    <div class="card">
+        <h3>New Dropped Packets</h3>
+        <div class="number yellow" id="new-dropped">--</div>
+    </div>
+</div>
+
+<p class="muted" id="last-update">Last update: --</p>
+<p class="section-note">
+    Live counters reflect current OpenFlow rules
+    and may reset when network rules change.
+</p>
+
+<h2>IoT Device Monitoring</h2>
+<div class="grid" id="devices"></div>
+
+<h2>Device Access Control</h2>
+<div class="grid" id="access-controls"></div>
+<p id="message"></p>
+
+<h2>Security Summary</h2>
+<div class="grid">
+    <div class="card">
+        <h3>Block Actions</h3>
+        <div class="number red" id="block-count">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Unblock Actions</h3>
+        <div class="number green" id="unblock-count">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Successful Actions</h3>
+        <div class="number green" id="success-count">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Failed Actions</h3>
+        <div class="number red" id="failed-count">--</div>
+    </div>
+
+    <div class="card">
+        <h3>Total Timeline Events</h3>
+        <div class="number" id="timeline-count">--</div>
+    </div>
+</div>
+
+<h2>Export Security Reports</h2>
+<div class="panel">
+    <p class="muted">
+        Download security events and access
+        control history for analysis.
+    </p>
+
+    <a class="download csv" href="/api/export/csv">
+        Download CSV Report
+    </a>
+
+    <a class="download pdf" href="/api/export/pdf">
+        Download PDF Report
+    </a>
+</div>
+
+<h2>Security Alerts</h2>
+<div class="panel" id="alerts">
+    Checking security events...
+</div>
+
+<h2>Security Timeline</h2>
+<p class="section-note">
+    Latest 100 events from security and access logs.
+</p>
+<div class="panel" id="timeline">
+    Loading timeline...
+</div>
+
+<h2>Dropped Packets per Event</h2>
+<div class="panel" id="chart"></div>
+
+<h2>Security Logs</h2>
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Packets</th>
+            </tr>
+        </thead>
+        <tbody id="logs"></tbody>
+    </table>
+</div>
+
+<h2>Access Audit Logs</h2>
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Device</th>
+                <th>Action</th>
+                <th>Status</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody id="audit"></tbody>
+    </table>
+</div>
+
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let busy = false;
+let refreshing = false;
+let previousEvents = null;
+let previousAudit = null;
+let previousResetTimestamp = null;
+
+async function api(url, options = {}) {
+    const response = await fetch(url, {
+        cache: "no-store",
+        ...options
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.error || "Request failed"
+        );
+    }
+
+    return data;
+}
+
+let csrfToken = null;
+
+async function initializeSecurity() {
+    const response = await fetch("/api/auth/session", {
+        credentials: "same-origin",
+        cache: "no-store"
+    });
+
+    if (response.status === 401) {
+        window.location.replace("/login");
+        throw new Error("Session expired");
+    }
+
+    if (!response.ok) {
+        throw new Error("Authentication check failed");
+    }
+
+    const data = await response.json();
+
+    if (!data.authenticated || !data.csrf_token) {
+        window.location.replace("/login");
+        throw new Error("Authentication required");
+    }
+
+    csrfToken = data.csrf_token;
+}
+
+async function api(url, options = {}) {
+    const method = (options.method || "GET").toUpperCase();
+
+    if (!csrfToken) {
+        await initializeSecurity();
+    }
+
+    const headers = new Headers(options.headers || {});
+
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+        headers.set("X-CSRF-Token", csrfToken);
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        method,
+        headers,
+        credentials: "same-origin",
+        cache: "no-store"
+    });
+
+    if (response.status === 401) {
+        csrfToken = null;
+        window.location.replace("/login");
+        throw new Error("Session expired");
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || "Request failed");
+    }
+
+    return data;
+}function setValue(id, value, className = "") {
+    const element = $(id);
+    element.textContent = value;
+
+    if (className) {
+        element.className = className;
+    }
+}
+
+function makeElement(tag, text, className = "") {
+    const element = document.createElement(tag);
+    element.textContent = String(text ?? "");
+
+    if (className) {
+        element.className = className;
+    }
+
+    return element;
+}
+
+function renderTable(id, rows, fields) {
+    const tbody = $(id);
+    tbody.replaceChildren();
+
+    rows.forEach(item => {
+        const tr = document.createElement("tr");
+
+        fields.forEach(field => {
+            tr.appendChild(
+                makeElement("td", item[field] ?? "")
+            );
+        });
+
+        tbody.appendChild(tr);
+    });
+}
+
+function showAlert(message) {
+    const container = $("alerts");
+
+    if (
+        container.textContent.trim() ===
+        "Checking security events..."
+    ) {
+        container.replaceChildren();
+    }
+
+    const alert = makeElement(
+        "div", message, "alert"
+    );
+
+    container.prepend(alert);
+
+    while (container.children.length > 8) {
+        container.lastElementChild.remove();
+    }
+}
+
+async function updateStats() {
+    try {
+        const data = await api("/api/stats");
+
+        setValue(
+            "history-packets",
+            data.total_packets
+        );
+
+        setValue("events", data.total_events);
+        setValue(
+            "api-status", "Online", "number green"
+        );
+
+        if (
+            previousEvents !== null &&
+            data.total_events > previousEvents
+        ) {
+            showAlert(
+                "New dropped traffic event detected"
+            );
+        }
+
+        previousEvents = data.total_events;
+
+        renderTable(
+            "logs",
+            [...data.logs].reverse().slice(0, 100),
+            ["Time", "Event", "Packets"]
+        );
+
+        const chart = $("chart");
+        chart.replaceChildren();
+
+        const recent = data.logs.slice(-10);
+        const max = Math.max(
+            1,
+            ...recent.map(
+                item => Number(item.Packets) || 0
+            )
+        );
+
+        recent.forEach((item, index) => {
+            const packets =
+                Number(item.Packets) || 0;
+
+            const row = document.createElement("div");
+            row.className = "chart-row";
+
+            const label = makeElement(
+                "span", "Event " + (index + 1)
+            );
+
+            const track = document.createElement("div");
+            track.className = "track";
+
+            const bar = document.createElement("div");
+            bar.className = "bar";
+
+            bar.style.width =
+                (packets / max * 100) + "%";
+
+            track.appendChild(bar);
+
+            row.append(
+                label,
+                track,
+                makeElement("span", packets)
+            );
+
+            chart.appendChild(row);
+        });
+
+    } catch (error) {
+        setValue(
+            "api-status", "Offline", "number red"
+        );
+    }
+}
+
+async function updateTraffic() {
+    try {
+        const data = await api("/api/traffic");
+
+        if (!data.available) {
+            setValue(
+                "monitor-status",
+                "Offline",
+                "number red"
+            );
+
+            setValue("allowed", "--");
+            setValue("dropped", "--");
+            setValue("new-dropped", "--");
+            setValue(
+                "last-update",
+                "Monitor data unavailable"
+            );
+            return;
+        }
+
+        setValue(
+            "monitor-status",
+            "Online",
+            "number green"
+        );
+
+        setValue(
+            "allowed", data.allowed_packets
+        );
+
+        setValue(
+            "dropped", data.dropped_packets
+        );
+
+        setValue(
+            "new-dropped",
+            data.new_dropped_packets
+        );
+
+        const date = new Date(data.timestamp);
+
+        setValue(
+            "last-update",
+            "Last update: " + date.toLocaleString()
+        );
+
+        if (
+            data.counters_reset &&
+            data.timestamp !== previousResetTimestamp
+        ) {
+            previousResetTimestamp = data.timestamp;
+            showAlert(
+                "OpenFlow counters changed or reset"
+            );
+        }
+
+    } catch (error) {
+        setValue(
+            "monitor-status",
+            "Offline",
+            "number red"
+        );
+    }
+}
+
+async function updateDevices() {
+    try {
+        const data = await api("/api/devices");
+        const container = $("devices");
+
+        container.replaceChildren();
+
+        data.devices.forEach(device => {
+            const card = document.createElement("div");
+            card.className = "card";
+
+            const status =
+                device.status || "Unknown";
+
+            const color =
+                status === "Online" ? "green" :
+                status === "Offline" ? "red" :
+                "yellow";
+
+            card.append(
+                makeElement("h3", device.name),
+                makeElement(
+                    "p",
+                    "IP: " + device.ip,
+                    "muted"
+                ),
+                makeElement(
+                    "p",
+                    "Status: " + status,
+                    color
+                )
+            );
+
+            container.appendChild(card);
+        });
+
+    } catch (error) {
+        $("devices").textContent =
+            "Device monitoring unavailable";
+    }
+}
+
+async function updateAccess() {
+    if (busy) return;
+
+    const container = $("access-controls");
+    container.replaceChildren();
+
+    for (const device of ["camera", "sensor"]) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const name = device === "camera" ?
+            "IoT Camera" : "IoT Sensor";
+
+        const title = makeElement("h3", name);
+        const status = makeElement(
+            "p", "Loading...", "yellow"
+        );
+
+        const block = makeElement(
+            "button", "Block", "block"
+        );
+
+        const unblock = makeElement(
+            "button", "Unblock", "unblock"
+        );
+
+        block.disabled = true;
+        unblock.disabled = true;
+
+        card.append(
+            title, status, block, unblock
+        );
+
+        container.appendChild(card);
+
+        try {
+            const data = await api(
+                "/api/access/status/" + device
+            );
+
+            status.textContent =
+                "Access: " + data.status;
+
+            status.className =
+                data.status === "Allowed" ? "green" :
+                data.status === "Blocked" ? "red" :
+                "yellow";
+
+            block.disabled =
+                data.status !== "Allowed";
+
+            unblock.disabled =
+                data.status !== "Blocked";
+
+            block.onclick = () =>
+                changeAccess(device, "block");
+
+            unblock.onclick = () =>
+                changeAccess(device, "unblock");
+
+        } catch (error) {
+            status.textContent = "Access: Unknown";
+            status.className = "yellow";
+        }
+    }
+}
+
+async function changeAccess(device, action) {
+    if (busy) return;
+
+    busy = true;
+
+    document.querySelectorAll(
+        "#access-controls button"
+    ).forEach(button => {
+        button.disabled = true;
+    });
+
+    try {
+        const data = await api(
+            "/api/access/" + device + "/" + action,
+            { method: "POST" }
+        );
+
+        setValue(
+            "message",
+            device + " access updated: " + data.status,
+            "green"
+        );
+
+        showAlert(
+            device + " access changed to " +
+            data.status
+        );
+
+    } catch (error) {
+        setValue(
+            "message",
+            "Action failed: " + error.message,
+            "red"
+        );
+
+    } finally {
+        busy = false;
+
+        await Promise.all([
+            updateAccess(),
+            updateAudit(),
+            updateSummary(),
+            updateTimeline()
+        ]);
+    }
+}
+
+async function updateAudit() {
+    try {
+        const data = await api("/api/audit");
+
+        renderTable(
+            "audit",
+            data.logs,
+            [
+                "Time", "Device", "Action",
+                "Status", "Result"
+            ]
+        );
+
+        const newest = data.logs[0];
+
+        if (
+            previousAudit !== null &&
+            newest &&
+            newest.Time !== previousAudit
+        ) {
+            showAlert(
+                newest.Device + " " +
+                newest.Action + " - " +
+                newest.Result
+            );
+        }
+
+        previousAudit =
+            newest ? newest.Time : null;
+
+    } catch (error) {
+        $("audit").replaceChildren();
+    }
+}
+
+async function updateSummary() {
+    try {
+        const data = await api("/api/summary");
+
+        setValue(
+            "block-count", data.block_actions
+        );
+
+        setValue(
+            "unblock-count", data.unblock_actions
+        );
+
+        setValue(
+            "success-count", data.successful_actions
+        );
+
+        setValue(
+            "failed-count", data.failed_actions
+        );
+
+        setValue(
+            "timeline-count",
+            data.total_timeline_events
+        );
+
+    } catch (error) {
+        console.error(
+            "Summary unavailable:", error
+        );
+    }
+}
+
+async function updateTimeline() {
+    try {
+        const data = await api("/api/timeline");
+        const container = $("timeline");
+
+        container.replaceChildren();
+
+        if (!data.events.length) {
+            container.textContent =
+                "No security events recorded.";
+            return;
+        }
+
+        data.events.forEach(event => {
+            const item = document.createElement("div");
+
+            const isDrop =
+                event.type === "Dropped Traffic";
+
+            item.className =
+                "timeline-item " +
+                (isDrop ? "drop" : "access");
+
+            const heading = makeElement(
+                "strong",
+                isDrop ?
+                "Dropped Traffic" :
+                "Access Control"
+            );
+
+            const time = makeElement(
+                "p",
+                new Date(
+                    event.timestamp
+                ).toLocaleString(),
+                "muted"
+            );
+
+            const details = makeElement(
+                "p",
+                isDrop ?
+                "Network | Dropped packets: " +
+                    event.packets :
+                event.device + " | " +
+                    event.action + " | " +
+                    event.status + " | " +
+                    event.result
+            );
+
+            item.append(
+                heading, time, details
+            );
+
+            container.appendChild(item);
+        });
+
+    } catch (error) {
+        $("timeline").textContent =
+            "Security timeline unavailable";
+    }
+}
+
+async function refresh() {
+    if (refreshing) return;
+
+    refreshing = true;
+
+    try {
+        await Promise.all([
+            updateStats(),
+            updateTraffic(),
+            updateDevices(),
+            updateAccess(),
+            updateAudit(),
+            updateSummary(),
+            updateTimeline()
+        ]);
+    } finally {
+        refreshing = false;
+    }
+}
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+
+</body>
+</html>
+

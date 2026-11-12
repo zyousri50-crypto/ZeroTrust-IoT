@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secrets and authentication
+dashboard/instance/
+instance/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated logs and monitoring data
+logs/*
+!logs/.gitkeep
+
+# Local backups
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# System and editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Additional backup and accidental files
+*.bak_*
+*.save
+*.save.*
+dashboard/app.pycd
+
+# Local databases and temporary files
+*.db
+*.sqlite
+*.sqlite3
+*.tmp
