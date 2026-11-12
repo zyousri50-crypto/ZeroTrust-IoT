@@ -243,3 +243,202 @@ This project is intended for educational and authorized cybersecurity research o
 ## Author
 
 Cybersecurity Graduation Project
+
+---
+
+## Quick Start — Kali Linux
+
+### Prerequisites
+
+This project is designed for a Linux environment with Mininet
+and Open vSwitch installed.
+
+Install the system packages:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  mininet \
+  openvswitch-switch \
+  python3 \
+  python3-venv \
+  python3-reportlab \
+  sudo
+```
+
+Start Open vSwitch:
+
+```bash
+sudo systemctl enable --now openvswitch-switch
+```
+
+### Clone and install
+
+```bash
+git clone https://github.com/zyousri50-crypto/ZeroTrust-IoT.git
+cd ZeroTrust-IoT
+
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### Configure administrator authentication
+
+On a fresh installation, run:
+
+```bash
+python3 setup_admin.py
+```
+
+Choose an administrator password when prompted.
+
+Default username:
+
+```text
+admin
+```
+
+Authentication credentials are stored locally in
+`dashboard/instance/` and excluded from Git.
+
+Do not commit passwords, password hashes, or secret keys.
+
+### Configure privileged helpers
+
+The dashboard uses restricted privileged helpers to inspect
+the simulated network and manage device access.
+
+Review the installation script before running it:
+
+```bash
+cat scripts/setup_helpers.sh
+```
+
+Then install the helpers:
+
+```bash
+sudo bash scripts/setup_helpers.sh
+```
+
+This installs root-owned helper copies and restricted sudo rules.
+
+Only run this script on a trusted Kali Linux machine.
+
+### Run the project
+
+Open three terminals.
+
+**Terminal 1 — IoT network**
+
+```bash
+cd ~/ZeroTrust-IoT
+sudo python3 network/iot_lab.py
+```
+
+Keep the Mininet CLI running.
+
+**Terminal 2 — Traffic monitor**
+
+```bash
+cd ~/ZeroTrust-IoT
+sudo python3 network/monitor.py
+```
+
+**Terminal 3 — Web dashboard**
+
+```bash
+cd ~/ZeroTrust-IoT
+source .venv/bin/activate
+python3 dashboard/app.py
+```
+
+Open:
+
+http://127.0.0.1:5000
+
+Sign in using username `admin` and the password
+created during setup.
+
+### Verify the installation
+
+Inside the Mininet CLI:
+
+```bash
+camera ping -c 5 server
+sensor ping -c 5 server
+```
+
+Check OpenFlow rules in a separate terminal:
+
+```bash
+sudo ovs-ofctl -O OpenFlow13 dump-flows s1
+```
+
+Check device access status:
+
+```bash
+sudo -n /usr/bin/python3 \
+  /usr/local/sbin/zerotrust-access-v2 status camera
+```
+
+Check device monitoring:
+
+```bash
+sudo -n /usr/bin/python3 \
+  /usr/local/sbin/zerotrust-device-monitor
+```
+
+### Troubleshooting
+
+**Dashboard reports missing authentication files**
+
+Run `python3 setup_admin.py` on a fresh installation.
+If credentials already exist, do not overwrite them blindly.
+
+**Device status displays Unknown**
+
+Verify that Mininet is running and that the privileged
+device monitor helper is installed and authorized.
+
+**Access control returns an error**
+
+Check that Open vSwitch is running, switch `s1` exists,
+and the restricted helper installation succeeded.
+
+**Port 5000 is unavailable**
+
+Check whether another process is using port 5000.
+
+### Security Notes
+
+- The dashboard is intended for localhost access.
+- Never expose the Flask development server directly to the internet.
+- Privileged helper installation requires administrator approval.
+- The project is an educational security prototype.
+
+---
+
+## Dashboard Screenshots
+
+### Dashboard Overview
+
+![Dashboard Overview](docs/screenshots/dashboard-overview.png)
+
+### Device Monitoring
+
+![Device Monitoring](docs/screenshots/device-monitoring.png)
+
+### Device Access Control
+
+![Device Access Control](docs/screenshots/access-control.png)
+
+### Security Logs
+
+![Security Logs](docs/screenshots/security-logs.png)
+
+### Administrator Login
+
+![Administrator Login](docs/screenshots/login-page.png)
+
