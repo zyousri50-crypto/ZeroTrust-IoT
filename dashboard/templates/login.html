@@ -1,158 +1,42 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZeroTrust IoT | Admin Login</title>
-
     <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0b1120;
-            color: #e2e8f0;
-            font-family: Arial, sans-serif;
-        }
-
-        .login-card {
-            width: 92%;
-            max-width: 410px;
-            background: #111c30;
-            border: 1px solid #263750;
-            border-radius: 18px;
-            padding: 36px;
-            box-shadow: 0 20px 60px #0005;
-        }
-
-        .logo {
-            font-size: 42px;
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        h1 {
-            font-size: 25px;
-            text-align: center;
-            margin-bottom: 8px;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #94a3b8;
-            font-size: 14px;
-            margin-bottom: 30px;
-        }
-
-        label {
-            display: block;
-            margin: 16px 0 8px;
-            font-size: 14px;
-        }
-
-        input {
-            width: 100%;
-            padding: 13px;
-            background: #0b1120;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            color: white;
-            font-size: 15px;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: #38bdf8;
-        }
-
-        button {
-            width: 100%;
-            padding: 14px;
-            margin-top: 25px;
-            background: #0284c7;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #0369a1;
-        }
-
-        .error {
-            background: #451a1a;
-            color: #fca5a5;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            font-size: 14px;
-        }
-
-        .footer {
-            text-align: center;
-            color: #64748b;
-            font-size: 12px;
-            margin-top: 25px;
-        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0b1120; color: #e2e8f0; font-family: Arial, sans-serif; }
+        .login-card { width: 92%; max-width: 410px; background: #111c30; border: 1px solid #263750; border-radius: 18px; padding: 36px; box-shadow: 0 20px 60px #0005; }
+        .logo { font-size: 42px; text-align: center; margin-bottom: 15px; }
+        h1 { font-size: 25px; text-align: center; margin-bottom: 8px; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 30px; }
+        label { display: block; margin: 16px 0 8px; font-size: 14px; }
+        input { width: 100%; padding: 13px; background: #0b1120; border: 1px solid #334155; border-radius: 8px; color: white; font-size: 15px; }
+        input:focus { outline: none; border-color: #38bdf8; }
+        button { width: 100%; padding: 14px; margin-top: 25px; background: #0284c7; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0369a1; }
+        .error { background: #451a1a; color: #fca5a5; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+        .footer { text-align: center; color: #64748b; font-size: 12px; margin-top: 25px; }
     </style>
 </head>
-
 <body>
     <main class="login-card">
         <div class="logo">🛡️</div>
-
         <h1>ZeroTrust IoT</h1>
-
-        <p class="subtitle">
-            Security Management Dashboard
-        </p>
-
+        <p class="subtitle">Security Management Dashboard</p>
         {% if error %}
-        <div class="error" role="alert">
-            {{ error }}
-        </div>
+        <div class="error" role="alert">{{ error }}</div>
         {% endif %}
-
         <form method="POST" action="/login">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="username">Username</label>
-
-            <input
-                id="username"
-                type="text"
-                name="username"
-                autocomplete="username"
-                required
-            >
-
+            <input id="username" type="text" name="username" autocomplete="username" required>
             <label for="password">Password</label>
-
-            <input
-                id="password"
-                type="password"
-                name="password"
-                autocomplete="current-password"
-                required
-            >
-
-            <button type="submit">
-                Secure Login
-            </button>
+            <input id="password" type="password" name="password" autocomplete="current-password" required>
+            <button type="submit">Secure Login</button>
         </form>
-
-        <div class="footer">
-            Authorized Access Only
-        </div>
+        <div class="footer">Authorized Access Only</div>
     </main>
 </body>
 </html>
