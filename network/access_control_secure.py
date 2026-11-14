@@ -128,164 +128,98 @@ def get_service_status(device, service):
 
 
 
+def block_pairs(ip):
+    return [(ip, SERVER_IP), (SERVER_IP, ip)]
+
+
+
 def get_status(device="camera"):
     ip = get_device_ip(device)
-    flows = ovs_command("dump-flows", SWITCH)
-
-    for line in flows.splitlines():
-        if (
+    flows = ovs_command("dump-flows", SWITCH).splitlines()
+    pairs = block_pairs(ip)
+    blocked = [
+        any(
             "priority=300," in line
             and "actions=drop" in line
-            and f"nw_src={ip}," in line
-            and f"nw_dst={SERVER_IP}" in line
-        ):
-            return "Blocked"
-
+            and f"nw_src={src}," in line
+            and f"nw_dst={dst}" in line
+            for line in flows
+        )
+        for src, dst in pairs
+    ]
+    if all(blocked):
+        return "Blocked"
+    if any(blocked):
+        return "Unknown"
     icmp = get_service_status(device, "icmp")
     http = get_service_status(device, "http")
-
     if icmp == "Denied" and http == "Denied":
         return "Blocked"
-
     if "Allowed" in (icmp, http):
         return "Allowed"
-
     return "Unknown"
+
+
+def _flow_rule(src, dst, drop=False):
+    rule = f"priority=300,ip,nw_src={src},nw_dst={dst}"
+    return rule + (",actions=drop" if drop else "")
+
+
+def _set_block_rules(ip, block):
+    for src, dst in block_pairs(ip):
+        rule = _flow_rule(src, dst, drop=block)
+        if block:
+            ovs_command("add-flow", SWITCH, rule)
+        else:
+            ovs_command("--strict", "del-flows", SWITCH, rule)
 
 
 def block_device(device="camera"):
     ip = get_device_ip(device)
-
-    previous_status = get_status(device)
-
-    if previous_status == "Blocked":
-        raise RuntimeError(
-            f"{device} is already blocked; no new authorization recorded"
-        )
-
-    if previous_status != "Allowed":
-        raise RuntimeError(
-            f"Cannot safely block {device}: "
-            f"previous status is {previous_status}"
-        )
-
-    rule = (
-        "priority=300,ip,"
-        "nw_src=" + ip + ","
-        "nw_dst=" + SERVER_IP + ","
-        "actions=drop"
-    )
-
-    ovs_command("add-flow", SWITCH, rule)
-
-    status = get_status(device)
-    if status != "Blocked":
-        raise RuntimeError(
-            f"Block verification failed for {device}: {status}"
-        )
-
+    previous = get_status(device)
+    if previous != "Allowed":
+        raise RuntimeError(f"Cannot block {device}: status={previous}")
     try:
+        _set_block_rules(ip, True)
+        status = get_status(device)
+        if status != "Blocked":
+            raise RuntimeError(f"Block verification failed: {status}")
         record_authorization(device, "block")
+        return status
     except Exception as error:
-        rollback_rule = (
-            "priority=300,ip,"
-            "nw_src=" + ip + ","
-            "nw_dst=" + SERVER_IP
-        )
-
         try:
-            ovs_command(
-                "--strict",
-                "del-flows",
-                SWITCH,
-                rollback_rule
-            )
-
-            rollback_status = get_status(device)
-            if rollback_status != "Allowed":
-                raise RuntimeError(
-                    f"Rollback verification failed: {rollback_status}"
-                )
-
+            _set_block_rules(ip, False)
+            if get_status(device) != "Allowed":
+                raise RuntimeError("Rollback verification failed")
         except Exception as rollback_error:
             raise RuntimeError(
-                f"Authorization failed: {error}; "
-                f"rollback also failed: {rollback_error}"
+                f"Block failed: {error}; rollback failed: {rollback_error}"
             ) from error
-
-        raise RuntimeError(
-            f"Authorization failed; block rollback attempted: {error}"
-        ) from error
-
-    return status
+        raise RuntimeError(f"Block failed and rolled back: {error}") from error
 
 
 def unblock_device(device="camera"):
     ip = get_device_ip(device)
-
-    previous_status = get_status(device)
-
-    if previous_status == "Allowed":
-        raise RuntimeError(
-            f"{device} is already allowed; no authorization change needed"
-        )
-
-    if previous_status != "Blocked":
-        raise RuntimeError(
-            f"Cannot safely unblock {device}: "
-            f"previous status is {previous_status}"
-        )
-
-    rule = (
-        "priority=300,ip,"
-        "nw_src=" + ip + ","
-        "nw_dst=" + SERVER_IP
-    )
-
-    ovs_command(
-        "--strict",
-        "del-flows",
-        SWITCH,
-        rule
-    )
-
-    status = get_status(device)
-    if status != "Allowed":
-        raise RuntimeError(
-            f"Unblock verification failed for {device}: {status}"
-        )
-
+    previous = get_status(device)
+    if previous != "Blocked":
+        raise RuntimeError(f"Cannot unblock {device}: status={previous}")
     try:
+        _set_block_rules(ip, False)
+        status = get_status(device)
+        if status != "Allowed":
+            raise RuntimeError(f"Unblock verification failed: {status}")
         record_authorization(device, "unblock")
+        return status
     except Exception as error:
-        rollback_rule = (
-            "priority=300,ip,"
-            "nw_src=" + ip + ","
-            "nw_dst=" + SERVER_IP + ","
-            "actions=drop"
-        )
-
         try:
-            ovs_command("add-flow", SWITCH, rollback_rule)
-
-            rollback_status = get_status(device)
-            if rollback_status != "Blocked":
-                raise RuntimeError(
-                    f"Rollback verification failed: {rollback_status}"
-                )
-
+            _set_block_rules(ip, True)
+            if get_status(device) != "Blocked":
+                raise RuntimeError("Rollback verification failed")
         except Exception as rollback_error:
             raise RuntimeError(
-                f"Authorization update failed: {error}; "
-                f"rollback failed: {rollback_error}"
+                f"Unblock failed: {error}; rollback failed: {rollback_error}"
             ) from error
-
-        raise RuntimeError(
-            f"Authorization update failed; "
-            f"previous block restored: {error}"
-        ) from error
-
-    return status
+        raise RuntimeError(f"Unblock failed and rolled back: {error}") from error
 
 
 def block_camera():
