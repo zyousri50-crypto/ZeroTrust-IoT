@@ -41,23 +41,29 @@ def get_flow_stats():
 
     allowed = 0
     dropped = 0
+    total_bytes = 0
+    flow_count = 0
 
     for line in result.stdout.splitlines():
-        match = re.search(r"\bn_packets=(\d+)", line)
+        packet_match = re.search(r"\bn_packets=(\d+)", line)
+        byte_match = re.search(r"\bn_bytes=(\d+)", line)
 
-        if not match or "actions=" not in line:
+        if not packet_match or not byte_match or "actions=" not in line:
             continue
 
-        packets = int(match.group(1))
+        packets = int(packet_match.group(1))
+        byte_count = int(byte_match.group(1))
         actions = line.split("actions=", 1)[1].strip()
 
-        if actions == "drop":
-            dropped += packets
+        flow_count += 1
+        total_bytes += byte_count
 
+        if actions.lower() == "drop":
+            dropped += packets
         elif actions:
             allowed += packets
 
-    return allowed, dropped
+    return allowed, dropped, total_bytes, flow_count
 
 
 def save_security_log(packets):
@@ -76,11 +82,7 @@ def save_security_log(packets):
         writer = csv.writer(file)
 
         if new_file:
-            writer.writerow([
-                "Time",
-                "Event",
-                "Packets"
-            ])
+            writer.writerow(["Time", "Event", "Packets"])
 
         writer.writerow([
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -93,81 +95,118 @@ def save_traffic_stats(
     allowed,
     dropped,
     new_dropped,
-    counters_reset
+    counters_reset,
+    allowed_packet_rate,
+    dropped_packet_rate,
+    byte_rate,
+    flow_count,
+    drop_ratio
 ):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     data = {
-        "timestamp": datetime.now(
-            timezone.utc
-        ).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "switch": SWITCH,
         "allowed_packets": allowed,
         "dropped_packets": dropped,
         "new_dropped_packets": new_dropped,
-        "counters_reset": counters_reset
+        "counters_reset": counters_reset,
+        "allowed_packet_rate": round(allowed_packet_rate, 2),
+        "dropped_packet_rate": round(dropped_packet_rate, 2),
+        "byte_rate": round(byte_rate, 2),
+        "flow_count": flow_count,
+        "drop_ratio": round(drop_ratio, 4)
     }
 
     temp_file = TRAFFIC_FILE.with_suffix(".json.tmp")
 
-    with temp_file.open(
-        "w",
-        encoding="utf-8"
-    ) as file:
+    with temp_file.open("w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
     os.replace(temp_file, TRAFFIC_FILE)
 
 
 def main():
-    print("Starting Security Monitoring V2...")
+    print("Starting Security Monitoring V3...")
     print("Monitoring switch:", SWITCH)
     print("Press Ctrl+C to stop")
 
     last_allowed = None
     last_dropped = None
+    last_bytes = None
+    last_time = None
 
     try:
         while True:
             try:
-                allowed, dropped = get_flow_stats()
+                allowed, dropped, total_bytes, flow_count = get_flow_stats()
+                current_time = time.monotonic()
 
                 new_dropped = 0
                 counters_reset = False
+                allowed_packet_rate = 0.0
+                dropped_packet_rate = 0.0
+                byte_rate = 0.0
+                drop_ratio = 0.0
 
-                if last_dropped is not None:
+                if last_time is not None:
+                    elapsed = current_time - last_time
+
                     if (
-                        dropped < last_dropped
-                        or allowed < last_allowed
+                        allowed < last_allowed
+                        or dropped < last_dropped
+                        or total_bytes < last_bytes
                     ):
                         counters_reset = True
                         print("Flow counters changed or reset")
 
-                    elif dropped > last_dropped:
+                    elif elapsed > 0:
+                        new_allowed = allowed - last_allowed
                         new_dropped = dropped - last_dropped
+                        new_bytes = total_bytes - last_bytes
 
-                        save_security_log(new_dropped)
+                        allowed_packet_rate = new_allowed / elapsed
+                        dropped_packet_rate = new_dropped / elapsed
+                        byte_rate = new_bytes / elapsed
 
-                        print(
-                            "Security Alert:",
-                            new_dropped,
-                            "new dropped packets"
-                        )
+                        total_new = new_allowed + new_dropped
+
+                        if total_new > 0:
+                            drop_ratio = new_dropped / total_new
+
+                        if new_dropped > 0:
+                            save_security_log(new_dropped)
+                            print(
+                                "Security Alert:",
+                                new_dropped,
+                                "new dropped packets"
+                            )
 
                 save_traffic_stats(
                     allowed,
                     dropped,
                     new_dropped,
-                    counters_reset
+                    counters_reset,
+                    allowed_packet_rate,
+                    dropped_packet_rate,
+                    byte_rate,
+                    flow_count,
+                    drop_ratio
                 )
 
                 print(
                     "Allowed:", allowed,
-                    "| Dropped:", dropped
+                    "| Dropped:", dropped,
+                    "| Allowed Rate:", round(allowed_packet_rate, 2),
+                    "| Drop Rate:", round(dropped_packet_rate, 2),
+                    "| Byte Rate:", round(byte_rate, 2),
+                    "| Flows:", flow_count
                 )
 
                 last_allowed = allowed
                 last_dropped = dropped
+                last_bytes = total_bytes
+                last_time = current_time
 
             except (
                 RuntimeError,
@@ -176,6 +215,10 @@ def main():
                 ValueError
             ) as error:
                 print("Monitoring error:", error)
+                last_allowed = None
+                last_dropped = None
+                last_bytes = None
+                last_time = None
 
             time.sleep(INTERVAL)
 

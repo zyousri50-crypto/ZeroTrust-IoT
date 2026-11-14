@@ -82,13 +82,50 @@ def create_network():
                 "actions=normal"
             )
 
+        # Allow camera to access the HTTP test service
+        add_flow(
+            s1,
+            "priority=210,tcp,"
+            "nw_src=10.0.0.11,"
+            "nw_dst=10.0.0.100,"
+            "tp_dst=8080,"
+            "actions=normal"
+        )
+
+        # Allow HTTP service responses to camera
+        add_flow(
+            s1,
+            "priority=210,tcp,"
+            "nw_src=10.0.0.100,"
+            "nw_dst=10.0.0.11,"
+            "tp_src=8080,"
+            "actions=normal"
+        )
+
         # Default deny for all other traffic
         add_flow(
             s1,
             "priority=0,actions=drop"
         )
 
+        # Clear stale authorization records after resetting OpenFlow.
+        import importlib.util
+
+        writer_path = "/usr/local/sbin/zerotrust-authorization-writer.py"
+        spec = importlib.util.spec_from_file_location(
+            "zerotrust_authorization_writer", writer_path
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("Authorization writer unavailable")
+
+        writer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(writer)
+
+        for device in DEVICES:
+            writer.record_authorization(device, "unblock")
+
         print("Security rules added!")
+        print("Authorization state synchronized!")
         print("Network is ready!")
 
         CLI(net)

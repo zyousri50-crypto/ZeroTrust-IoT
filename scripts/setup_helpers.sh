@@ -27,10 +27,36 @@ if ! command -v mnexec >/dev/null 2>&1; then
     exit 1
 fi
 
+echo "[SETUP] Preparing protected authorization state..."
+
+install -d -o root -g root -m 700 /var/lib/zerotrust
+
+if [[ -L /var/lib/zerotrust/authorized_state.json ]]; then
+    echo "ERROR: Authorization state must not be a symbolic link."
+    exit 1
+fi
+
+if [[ -e /var/lib/zerotrust/authorized_state.json && ! -f /var/lib/zerotrust/authorized_state.json ]]; then
+    echo "ERROR: Authorization state must be a regular file."
+    exit 1
+fi
+
+if [[ ! -e /var/lib/zerotrust/authorized_state.json ]]; then
+    printf '%s\n' '{"version":1,"authorized_changes":{}}' \
+        > /var/lib/zerotrust/authorized_state.json
+fi
+
+chown root:root /var/lib/zerotrust/authorized_state.json
+chmod 600 /var/lib/zerotrust/authorized_state.json
+
 echo "[1/4] Installing protected helpers..."
 
 install -o root -g root -m 755 \
-    "$PROJECT_DIR/network/access_control.py" \
+    "$PROJECT_DIR/network/authorization_writer.py" \
+    /usr/local/sbin/zerotrust-authorization-writer.py
+
+install -o root -g root -m 755 \
+    "$PROJECT_DIR/network/access_control_secure.py" \
     /usr/local/sbin/zerotrust-access-v2
 
 install -o root -g root -m 755 \

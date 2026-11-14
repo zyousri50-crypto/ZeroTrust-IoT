@@ -159,6 +159,27 @@ th { color: #38bdf8; }
     line-height: 1.5;
 }
 
+.header-content {
+    max-width: 1350px;
+    margin: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.admin-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logout-btn {
+    background: #dc2626;
+    margin: 0;
+}
+
 @media (max-width: 600px) {
     main { padding: 12px; }
     header { padding: 18px; }
@@ -170,11 +191,21 @@ th { color: #38bdf8; }
 <body>
 
 <header>
-    <h1>ZeroTrust IoT Security Dashboard</h1>
-    <p class="muted">
-        Live Network Monitoring, Access Control
-        & Security Analytics
-    </p>
+    <div class="header-content">
+        <div>
+            <h1>ZeroTrust IoT Security Dashboard</h1>
+            <p class="muted">
+                Live Network Monitoring, Access Control
+                & Security Analytics
+            </p>
+        </div>
+        <div class="admin-info">
+            <span class="green">● Admin</span>
+            <button type="button" class="logout-btn" id="logout-btn">
+                Logout
+            </button>
+        </div>
+    </div>
 </header>
 
 <main>
@@ -282,6 +313,102 @@ th { color: #38bdf8; }
     Checking security events...
 </div>
 
+
+<!-- Experimental Machine Learning Security Monitoring -->
+<section id="ml-security-section">
+
+    <h2>ML Security Alerts</h2>
+
+    <p class="section-note">
+        Experimental machine learning predictions.
+        Alert candidates are not confirmed security incidents.
+    </p>
+
+    <div class="grid">
+
+        <div class="card">
+            <h3>ML Alert Candidates</h3>
+            <div class="number red" id="ml-alert-count">--</div>
+        </div>
+
+        <div class="card">
+            <h3>Normal Predictions</h3>
+            <div class="number green" id="ml-normal-count">--</div>
+        </div>
+
+        <div class="card">
+            <h3>ML Detection Status</h3>
+            <div class="number" id="ml-status">Loading</div>
+        </div>
+
+    </div>
+
+    <h3>Recent ML Predictions</h3>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Prediction</th>
+                    <th>Confidence</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+
+            <tbody id="ml-alerts-table">
+                <tr>
+                    <td colspan="4">
+                        Loading ML predictions...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</section>
+
+
+<!-- Rule-Based Port Scan Detection -->
+<section id="port-scan-section">
+    <h2>Port Scan Detection</h2>
+    <p class="section-note">
+        Rule-based TCP SYN monitoring. Alerts indicate
+        suspicious multi-port activity, not confirmed attacks.
+    </p>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Port Scan Alerts</h3>
+            <div class="number red" id="port-scan-count">--</div>
+        </div>
+        <div class="card">
+            <h3>Detection Status</h3>
+            <div class="number" id="port-scan-status">Loading</div>
+        </div>
+    </div>
+
+    <h3>Recent Port Scan Alerts</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Source IP</th>
+                    <th>Destination IP</th>
+                    <th>Unique Ports</th>
+                    <th>Ports</th>
+                </tr>
+            </thead>
+            <tbody id="port-scan-table">
+                <tr>
+                    <td colspan="5">Loading alerts...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
 <h2>Security Timeline</h2>
 <p class="section-note">
     Latest 100 events from security and access logs.
@@ -334,25 +461,7 @@ let previousEvents = null;
 let previousAudit = null;
 let previousResetTimestamp = null;
 
-async function api(url, options = {}) {
-    const response = await fetch(url, {
-        cache: "no-store",
-        ...options
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            data.error || "Request failed"
-        );
-    }
-
-    return data;
-}
-
 let csrfToken = null;
-
 async function initializeSecurity() {
     const response = await fetch("/api/auth/session", {
         credentials: "same-origin",
@@ -412,7 +521,36 @@ async function api(url, options = {}) {
     }
 
     return data;
-}function setValue(id, value, className = "") {
+}
+
+const logoutButton = $("logout-btn");
+
+if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+        if (!confirm("Are you sure you want to log out?")) return;
+
+        try {
+            if (!csrfToken) await initializeSecurity();
+
+            const response = await fetch("/logout", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "X-CSRF-Token": csrfToken },
+                cache: "no-store"
+            });
+
+            if (response.ok || response.redirected) {
+                window.location.replace("/login");
+            } else {
+                alert("Logout failed. Please try again.");
+            }
+        } catch (error) {
+            alert("Logout failed: " + error.message);
+        }
+    });
+}
+
+function setValue(id, value, className = "") {
     const element = $(id);
     element.textContent = value;
 
@@ -901,6 +1039,140 @@ async function updateTimeline() {
     }
 }
 
+
+async function updateMLAlerts() {
+    const table = $("ml-alerts-table");
+    const status = $("ml-status");
+
+    try {
+        const data = await api("/api/ml/alerts");
+
+        if (!data || data.success !== true) {
+            throw new Error("ML API unavailable");
+        }
+
+        setValue("ml-alert-count", data.alert_candidate_count);
+        setValue("ml-normal-count", data.normal_count);
+        status.textContent = "Connected";
+
+        table.replaceChildren();
+
+        const records = Array.isArray(data.alerts)
+            ? data.alerts.slice(0, 20)
+            : [];
+
+        if (records.length === 0) {
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+            cell.colSpan = 4;
+            cell.textContent = "No ML predictions recorded.";
+            row.appendChild(cell);
+            table.appendChild(row);
+            return;
+        }
+
+        for (const record of records) {
+            const row = document.createElement("tr");
+            const confidence = Number(record.confidence);
+
+            const values = [
+                record.timestamp || "Unknown",
+                record.prediction || "Unknown",
+                Number.isFinite(confidence)
+                    ? (confidence * 100).toFixed(1) + "%"
+                    : "N/A",
+                record.status || "Unknown"
+            ];
+
+            for (const value of values) {
+                const cell = document.createElement("td");
+                cell.textContent = String(value);
+                row.appendChild(cell);
+            }
+
+            table.appendChild(row);
+        }
+
+    } catch (error) {
+        setValue("ml-alert-count", "--");
+        setValue("ml-normal-count", "--");
+        status.textContent = "Unavailable";
+
+        table.replaceChildren();
+
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "ML predictions unavailable.";
+        row.appendChild(cell);
+        table.appendChild(row);
+    }
+}
+
+
+async function updatePortScanAlerts() {
+    const table = $("port-scan-table");
+    const status = $("port-scan-status");
+
+    try {
+        const data = await api("/api/port-scan/alerts");
+
+        if (!data || data.success !== true) {
+            throw new Error("Port Scan API unavailable");
+        }
+
+        setValue("port-scan-count", data.total);
+        status.textContent = "Connected";
+        table.replaceChildren();
+
+        const records = Array.isArray(data.alerts)
+            ? data.alerts.slice(0, 20)
+            : [];
+
+        if (records.length === 0) {
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+            cell.colSpan = 5;
+            cell.textContent = "No port scan alerts recorded.";
+            row.appendChild(cell);
+            table.appendChild(row);
+            return;
+        }
+
+        for (const record of records) {
+            const row = document.createElement("tr");
+
+            const values = [
+                record.timestamp || "Unknown",
+                record.source_ip || "Unknown",
+                record.destination_ip || "Unknown",
+                record.unique_ports ?? "N/A",
+                record.ports || "N/A"
+            ];
+
+            for (const value of values) {
+                const cell = document.createElement("td");
+                cell.textContent = String(value);
+                row.appendChild(cell);
+            }
+
+            table.appendChild(row);
+        }
+
+    } catch (error) {
+        setValue("port-scan-count", "--");
+        status.textContent = "Unavailable";
+        table.replaceChildren();
+
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "Port scan alerts unavailable.";
+        row.appendChild(cell);
+        table.appendChild(row);
+    }
+}
+
 async function refresh() {
     if (refreshing) return;
 
@@ -914,7 +1186,9 @@ async function refresh() {
             updateAccess(),
             updateAudit(),
             updateSummary(),
-            updateTimeline()
+            updateTimeline(),
+            updateMLAlerts(),
+            updatePortScanAlerts()
         ]);
     } finally {
         refreshing = false;

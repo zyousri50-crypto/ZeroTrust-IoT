@@ -47,3 +47,8 @@ dashboard/app.pycd
 *.sqlite
 *.sqlite3
 *.tmp
+
+# Development snapshots (keep locally, exclude from Git)
+*_before_*.py
+*_before_*.html
+*_backup.py

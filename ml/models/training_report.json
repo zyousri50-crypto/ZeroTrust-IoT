@@ -1,0 +1,59 @@
+{
+    "created_at": "2026-11-12T13:09:53.224984+00:00",
+    "model": "RandomForestClassifier",
+    "version": "1.0",
+    "features": [
+        "allowed_packet_rate",
+        "dropped_packet_rate",
+        "byte_rate",
+        "flow_count",
+        "drop_ratio"
+    ],
+    "train_scenarios": [
+        "normal_001",
+        "unauthorized_001"
+    ],
+    "test_scenarios": [
+        "normal_002",
+        "unauthorized_002"
+    ],
+    "training_samples": 21,
+    "testing_samples": 31,
+    "accuracy": 1.0,
+    "precision_per_class": {
+        "normal": 1.0,
+        "unauthorized_access": 1.0
+    },
+    "recall_per_class": {
+        "normal": 1.0,
+        "unauthorized_access": 1.0
+    },
+    "f1_per_class": {
+        "normal": 1.0,
+        "unauthorized_access": 1.0
+    },
+    "confusion_matrix": [
+        [
+            16,
+            0
+        ],
+        [
+            0,
+            15
+        ]
+    ],
+    "feature_importance": {
+        "allowed_packet_rate": 0.27,
+        "drop_ratio": 0.27,
+        "dropped_packet_rate": 0.26,
+        "byte_rate": 0.2,
+        "flow_count": 0.0
+    },
+    "limitations": [
+        "Only four independent scenarios were collected.",
+        "Only two traffic behavior classes are supported.",
+        "Labels were selected using traffic-rate rules.",
+        "High accuracy does not establish attack detection.",
+        "Additional independent experiments are required."
+    ]
+}

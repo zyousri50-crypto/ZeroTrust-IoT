@@ -62,6 +62,86 @@ def get_status(device="camera"):
     return "Unknown"
 
 
+
+
+def get_service_status(device, service):
+    """
+    Inspect effective OpenFlow policy for a device-to-server service.
+    Supported services: icmp, http.
+    """
+    ip = get_device_ip(device)
+
+    services = {
+        "icmp": ("icmp", None),
+        "http": ("tcp", 8080)
+    }
+
+    if service not in services:
+        raise ValueError("Unknown service")
+
+    protocol, port = services[service]
+    flows = ovs_command("dump-flows", SWITCH)
+    matching_rules = []
+
+    for line in flows.splitlines():
+        if "actions=" not in line:
+            continue
+
+        match = line.split("actions=", 1)[0]
+        action = line.split("actions=", 1)[1].strip().lower()
+
+        priority_match = __import__("re").search(
+            r"\bpriority=(\d+)", match
+        )
+
+        if not priority_match:
+            continue
+
+        priority = int(priority_match.group(1))
+
+        # A rule with a different source/destination cannot match.
+        if "nw_src=" in match and f"nw_src={ip}" not in match:
+            continue
+
+        if "nw_dst=" in match and f"nw_dst={SERVER_IP}" not in match:
+            continue
+
+        # Ignore rules for other IP protocols.
+        if protocol == "icmp" and ",tcp," in match:
+            continue
+
+        if protocol == "tcp" and ",icmp," in match:
+            continue
+
+        if port is not None and "tp_dst=" in match:
+            if f"tp_dst={port}" not in match:
+                continue
+
+        if port is None and "tp_dst=" in match:
+            continue
+
+        # Ignore ARP rules for IP traffic.
+        if ",arp" in match:
+            continue
+
+        matching_rules.append((priority, action))
+
+    if not matching_rules:
+        return "Unknown"
+
+    matching_rules.sort(reverse=True)
+
+    highest_priority, action = matching_rules[0]
+
+    if action == "drop":
+        return "Denied"
+
+    if "normal" in action:
+        return "Allowed"
+
+    return "Unknown"
+
+
 def block_device(device="camera"):
     ip = get_device_ip(device)
 

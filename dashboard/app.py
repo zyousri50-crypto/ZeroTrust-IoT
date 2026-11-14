@@ -1,5 +1,5 @@
 
-from flask import Flask, render_template, jsonify, Response
+from flask import Flask, render_template, jsonify, Response, session
 from pathlib import Path
 from datetime import datetime, timezone
 from io import StringIO, BytesIO
@@ -220,13 +220,34 @@ def access_command(action, device):
 
 
 def write_audit(device, action, status, result):
-    LOG_DIR.mkdir(
-        parents=True, exist_ok=True
-    )
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    columns = [
+        "Time", "Device", "Action",
+        "Status", "Result", "Username"
+    ]
+
+    if AUDIT_FILE.exists() and AUDIT_FILE.stat().st_size:
+        with AUDIT_FILE.open(
+            "r", newline="", encoding="utf-8"
+        ) as file:
+            reader = csv.DictReader(file)
+            existing_columns = reader.fieldnames or []
+
+        if existing_columns != columns:
+            raise RuntimeError(
+                "Audit log schema requires migration"
+            )
 
     new_file = (
         not AUDIT_FILE.exists()
         or AUDIT_FILE.stat().st_size == 0
+    )
+
+    username = (
+        "admin"
+        if session.get("authenticated")
+        else "unknown"
     )
 
     with AUDIT_FILE.open(
@@ -235,19 +256,15 @@ def write_audit(device, action, status, result):
         writer = csv.writer(file)
 
         if new_file:
-            writer.writerow([
-                "Time", "Device", "Action",
-                "Status", "Result"
-            ])
+            writer.writerow(columns)
 
         writer.writerow([
-            datetime.now(
-                timezone.utc
-            ).isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             device,
             action,
             status,
-            result
+            result,
+            username
         ])
 
 
@@ -803,6 +820,112 @@ def change_access(device, action):
             "success": False,
             "error": "Access control failed"
         }), 503
+
+
+
+@app.route("/api/ml/alerts", methods=["GET"])
+def ml_alerts():
+    ml_file = LOG_DIR / "ml_detection_log.csv"
+
+    try:
+        records = read_csv(ml_file)
+    except (OSError, csv.Error, UnicodeError):
+        app.logger.exception("Unable to read ML detection log")
+        return jsonify({
+            "success": False,
+            "error": "Unable to read ML detection log"
+        }), 500
+
+    recent = records[-100:][::-1]
+    alerts = []
+
+    for record in recent:
+        prediction = record.get("prediction", "")
+
+        if prediction not in ("normal", "unauthorized_access"):
+            continue
+
+        try:
+            confidence = float(record.get("confidence", ""))
+            if not 0 <= confidence <= 1:
+                continue
+        except (ValueError, TypeError):
+            continue
+
+        alerts.append({
+            "timestamp": record.get("timestamp", ""),
+            "source_timestamp": record.get("source_timestamp", ""),
+            "prediction": prediction,
+            "confidence": confidence,
+            "status": (
+                "alert_candidate"
+                if prediction == "unauthorized_access"
+                else "normal"
+            ),
+            "allowed_packet_rate": record.get("allowed_packet_rate", ""),
+            "dropped_packet_rate": record.get("dropped_packet_rate", ""),
+            "drop_ratio": record.get("drop_ratio", "")
+        })
+
+    return jsonify({
+        "success": True,
+        "experimental": True,
+        "warning": (
+            "ML predictions are experimental and "
+            "do not confirm security incidents."
+        ),
+        "total": len(alerts),
+        "normal_count": sum(
+            item["prediction"] == "normal" for item in alerts
+        ),
+        "alert_candidate_count": sum(
+            item["prediction"] == "unauthorized_access"
+            for item in alerts
+        ),
+        "alerts": alerts
+    })
+
+
+
+@app.route("/api/port-scan/alerts", methods=["GET"])
+def api_port_scan_alerts():
+    log_file = LOG_DIR / "port_scan_alerts.csv"
+
+    if not log_file.exists():
+        return jsonify({
+            "success": True,
+            "total": 0,
+            "alerts": []
+        })
+
+    try:
+        records = read_csv(log_file)
+        alerts = []
+
+        for record in reversed(records[-100:]):
+            try:
+                alerts.append({
+                    "timestamp": record["timestamp"],
+                    "attack_type": record["attack_type"],
+                    "source_ip": record["source_ip"],
+                    "destination_ip": record["destination_ip"],
+                    "unique_ports": int(record["unique_ports"]),
+                    "ports": record["ports"]
+                })
+            except (KeyError, ValueError, TypeError):
+                continue
+
+        return jsonify({
+            "success": True,
+            "total": len(alerts),
+            "alerts": alerts
+        })
+
+    except (OSError, csv.Error) as error:
+        return jsonify({
+            "success": False,
+            "error": "Unable to read port scan alerts"
+        }), 500
 
 
 if __name__ == "__main__":

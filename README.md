@@ -227,6 +227,51 @@ ZeroTrust-IoT/
 └── README.md
 ```
 
+
+## Advanced Security Features
+
+### Machine Learning Anomaly Detection
+- Random Forest classifier with five traffic features.
+- Classifies `normal` and `unauthorized_access` traffic.
+- Records predictions in `logs/ml_detection_log.csv`.
+- Experimental model; real-world accuracy is not established.
+
+### Port Scan Detection
+- Detects TCP SYN scans using unique destination ports.
+- Threshold: 10 ports within 10 seconds.
+- Records alerts in `logs/port_scan_alerts.csv`.
+- Detection only; no automatic blocking.
+
+### Continuous Policy Verification
+- Periodically checks expected network access policies.
+- Records results in `logs/verification_log.csv`.
+- Distinguishes certain authorized changes from policy violations.
+
+### Security Testing
+- 11 security unit tests passed in the latest local run.
+- Tests cover selected access-control and authorization behavior.
+
+
+## Running Advanced Security Components
+
+Start Mininet and the traffic monitor first. Run each component in a separate terminal.
+
+### Port Scan Detector
+
+Command: `sudo ./.venv/bin/python network/port_scan_detector.py`
+
+### ML Anomaly Detector
+
+Command: `./.venv/bin/python ml/anomaly_detector.py`
+
+### Continuous Verification
+
+Command: `sudo python3 network/continuous_verification.py`
+
+### Security Unit Tests
+
+Command: `./.venv/bin/python -m unittest discover -s network -p test_\*.py -v`
+
 ## Future Improvements
 
 - Role-based access control
